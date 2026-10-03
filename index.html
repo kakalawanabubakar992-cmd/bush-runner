@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bush Runner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1c2615">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="description" content="Run through the bush, jump over logs, rocks and thorns. The longer you run, the faster it gets.">
 <style>
 :root{--bg:#1c2615;--ink:#f4ecd0;--muted:#b9c08f}
@@ -24,6 +28,7 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
 <canvas id="game" aria-label="Bush Runner game. Press space or tap to jump."></canvas>
 <p>Press <kbd>Space</kbd> or <kbd>&uarr;</kbd>, or tap the screen, to jump. Clear every obstacle and your speed keeps climbing.</p>
 <button id="mute" type="button">Sound: on</button>
+<p id="offline" hidden>Ready to play offline</p>
 <script>
 (() => {
   const cv = document.getElementById('game'), ctx = cv.getContext('2d');
@@ -275,6 +280,14 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
   }
   requestAnimationFrame(frame);
 })();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.ready.then(() => { document.getElementById('offline').hidden = false; });
+  });
+}
 </script>
 </body>
 </html>
