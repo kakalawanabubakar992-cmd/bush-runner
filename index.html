@@ -10,31 +10,27 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="description" content="Run through the bush, jump over logs, rocks and thorns. The longer you run, the faster it gets.">
 <style>
-:root{--bg:#1c2615;--ink:#f4ecd0;--muted:#b9c08f}
+:root{--bg:#1c2615;--ink:#f4ecd0}
 *{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
-h1{margin:0;font-size:1.4rem;font-weight:700;letter-spacing:.02em}
-canvas{width:100%;max-width:900px;aspect-ratio:2/1;border-radius:14px;background:#6fa8bd;display:block;cursor:pointer}
-p{margin:0;color:var(--muted);font-size:.95rem;text-align:center;max-width:46ch;line-height:1.5}
-kbd{background:#2d3a22;border:1px solid #475a35;border-radius:5px;padding:1px 7px;font:inherit;color:var(--ink)}
-button{margin-top:2px;background:#2d3a22;color:var(--ink);border:1px solid #475a35;border-radius:8px;padding:7px 16px;font:inherit;font-size:.95rem;cursor:pointer}
-button:hover{background:#3a4a2c}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:none;background:var(--bg);color:var(--ink);font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+canvas{position:fixed;left:0;top:0;display:block;background:#6fa8bd;cursor:pointer}
+button{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));background:rgba(28,38,21,.72);color:var(--ink);border:1px solid #475a35;border-radius:8px;padding:8px 14px;font:inherit;font-size:.9rem;cursor:pointer;touch-action:manipulation}
+button:hover{background:rgba(58,74,44,.85)}
 button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
+#offline{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);margin:0;background:rgba(28,38,21,.8);padding:6px 14px;border-radius:999px;font-size:.85rem;pointer-events:none}
+#safe{position:fixed;inset:0;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);visibility:hidden;pointer-events:none}
 </style>
 </head>
 <body>
-<h1>Bush Runner</h1>
 <canvas id="game" aria-label="Bush Runner game. Press space or tap to jump."></canvas>
-<p>Press <kbd>Space</kbd> or <kbd>&uarr;</kbd>, or tap the screen, to jump. Clear every obstacle and your speed keeps climbing.</p>
 <button id="mute" type="button">Sound: on</button>
 <p id="offline" hidden>Ready to play offline</p>
+<div id="safe"></div>
 <script>
 (() => {
   const cv = document.getElementById('game'), ctx = cv.getContext('2d');
-  const W = 900, H = 450, GROUND = 370;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  cv.width = W * dpr; cv.height = H * dpr; ctx.scale(dpr, dpr);
+  const safeEl = document.getElementById('safe');
+  let W = 900, H = 450, GROUND = 370, K = 1, sky, inset = { t: 0, r: 0, b: 0, l: 0 };
 
   const GRAV = 2300, JUMP = 800, START = 320, MAXV = 850, ACCEL = 9;
   const TYPES = [
@@ -50,9 +46,7 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
 
   const bushes = Array.from({ length: 9 }, (_, i) => ({ x: i * 135 + rnd(0, 60), r: rnd(26, 44), c: i % 2 ? '#4b6a2f' : '#587a35' }));
   const trees = [0, 1, 2].map(i => ({ x: i * 520 + rnd(0, 160), h: rnd(70, 100) }));
-  const pebbles = Array.from({ length: 25 }, (_, i) => ({ x: i * 50 + rnd(0, 30), y: GROUND + rnd(24, H - GROUND - 8), r: rnd(1.5, 3.5) }));
-  const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
-  sky.addColorStop(0, '#6fa8bd'); sky.addColorStop(1, '#f3d68e');
+  const pebbles = Array.from({ length: 25 }, (_, i) => ({ x: i * 50 + rnd(0, 30), fy: rnd(0.18, 0.92), r: rnd(1.5, 3.5) }));
 
   const score = () => Math.floor(dist / 10);
 
@@ -100,7 +94,7 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
   };
 
   function reset() {
-    speed = START; dist = 0; obstacles = []; gapLeft = 500;
+    speed = START * K; dist = 0; obstacles = []; gapLeft = 500;
     player.y = GROUND; player.vy = 0; lastStep = 0; lastMile = 0; state = 'running'; sfx.start();
   }
   function gameOver(name) {
@@ -130,8 +124,8 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
 
   function update(dt) {
     if (state !== 'running') { if (state === 'ready') off += 40 * dt; return; }
-    speed = Math.min(MAXV, speed + ACCEL * dt);
-    dist += speed * dt; off += speed * dt;
+    speed = Math.min(MAXV * K, speed + ACCEL * K * dt);
+    dist += speed / K * dt; off += speed * dt;
     const wasAir = player.y < GROUND;
     player.vy += GRAV * dt; player.y += player.vy * dt;
     if (player.y >= GROUND) { player.y = GROUND; player.vy = 0; if (wasAir) sfx.land(); }
@@ -152,7 +146,7 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
 
   function tile(items, period, f, fn) {
     const o = (off * f) % period;
-    for (const it of items) for (let k = 0; k <= 1; k++) {
+    for (const it of items) for (let k = 0; k <= 2; k++) {
       const x = it.x - o + k * period;
       if (x > -120 && x < W + 120) fn(it, x);
     }
@@ -160,8 +154,8 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
 
   function drawScene() {
     ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(255,241,184,.28)'; ctx.beginPath(); ctx.arc(700, 92, 62, 0, 7); ctx.fill();
-    ctx.fillStyle = '#fff1b8'; ctx.beginPath(); ctx.arc(700, 92, 38, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,241,184,.28)'; ctx.beginPath(); ctx.arc(W * 0.78, Math.max(92, GROUND * 0.25), 62, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff1b8'; ctx.beginPath(); ctx.arc(W * 0.78, Math.max(92, GROUND * 0.25), 38, 0, 7); ctx.fill();
 
     const hills = (base, amp, f, col) => {
       const o = off * f;
@@ -172,8 +166,8 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
       }
       ctx.lineTo(W, GROUND); ctx.fill();
     };
-    hills(255, 22, .04, '#a6b26f');
-    hills(290, 16, .08, '#8a9a5b');
+    hills(GROUND - 115, 22, .04, '#a6b26f');
+    hills(GROUND - 80, 16, .08, '#8a9a5b');
 
     tile(trees, 1560, .18, (t, x) => {
       const by = GROUND - 22;
@@ -191,13 +185,14 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
     });
 
     ctx.fillStyle = '#a67c4a'; ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = 'rgba(60,40,20,.16)'; ctx.fillRect(0, GROUND + (H - GROUND) * 0.55, W, H);
     ctx.fillStyle = '#6f8f3a'; ctx.fillRect(0, GROUND, W, 12);
     for (let x = -(off % 40); x < W; x += 40) {
       ctx.beginPath(); ctx.moveTo(x, GROUND + 4); ctx.lineTo(x + 5, GROUND - 9);
       ctx.lineTo(x + 10, GROUND + 4); ctx.lineTo(x + 15, GROUND - 6); ctx.lineTo(x + 20, GROUND + 4); ctx.fill();
     }
     ctx.fillStyle = '#85612f';
-    tile(pebbles, 1250, 1, (p, x) => { ctx.beginPath(); ctx.arc(x, p.y, p.r, 0, 7); ctx.fill(); });
+    tile(pebbles, 1250, 1, (p, x) => { ctx.beginPath(); ctx.arc(x, GROUND + p.fy * (H - GROUND), p.r, 0, 7); ctx.fill(); });
   }
 
   function drawObstacle(o) {
@@ -254,21 +249,43 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
 
   function drawHUD() {
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = 'rgba(28,38,21,.55)'; ctx.beginPath(); ctx.roundRect(16, 16, W - 32, 40, 10); ctx.fill();
+    const x0 = 16 + inset.l, x1 = W - 16 - inset.r, y0 = 16 + inset.t;
+    ctx.fillStyle = 'rgba(28,38,21,.55)'; ctx.beginPath(); ctx.roundRect(x0, y0, x1 - x0, 40, 10); ctx.fill();
     ctx.fillStyle = '#f4ecd0'; ctx.font = `700 20px ${FONT}`;
-    ctx.textAlign = 'left'; ctx.fillText(`${score()} m`, 32, 43);
-    ctx.textAlign = 'center'; ctx.fillText(`Speed ${(speed / START).toFixed(1)}x`, W / 2, 43);
-    ctx.textAlign = 'right'; ctx.fillText(`Best ${best} m`, W - 32, 43);
+    ctx.textAlign = 'left'; ctx.fillText(`${score()} m`, x0 + 16, y0 + 27);
+    ctx.textAlign = 'center'; ctx.fillText(`Speed ${(speed / (START * K)).toFixed(1)}x`, (x0 + x1) / 2, y0 + 27);
+    ctx.textAlign = 'right'; ctx.fillText(`Best ${best} m`, x1 - 16, y0 + 27);
   }
 
   function overlay(title, lines) {
     ctx.fillStyle = 'rgba(28,38,21,.58)'; ctx.fillRect(0, 0, W, H);
+    const cy = Math.round(GROUND * 0.51);
     ctx.textAlign = 'center'; ctx.fillStyle = '#f4ecd0';
-    ctx.font = `700 46px ${FONT}`; ctx.fillText(title, W / 2, 190);
-    ctx.font = `400 21px ${FONT}`;
-    lines.forEach((l, i) => ctx.fillText(l, W / 2, 232 + i * 32));
+    ctx.font = `700 ${Math.min(46, W * 0.07)}px ${FONT}`; ctx.fillText(title, W / 2, cy);
+    ctx.font = `400 ${Math.min(21, W * 0.034)}px ${FONT}`;
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, cy + 42 + i * 32));
   }
 
+  function fit() {
+    const vw = window.innerWidth, vh = window.innerHeight, portrait = vh > vw;
+    const scale = Math.min(vw / (portrait ? 600 : 900), vh / 400);
+    const onGround = player.y >= GROUND;
+    W = vw / scale; H = vh / scale; K = Math.min(1, W / 900);
+    GROUND = Math.round(H * (portrait ? 0.68 : 0.82));
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2, 2400 / Math.max(vw, vh)));
+    cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+    ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+    const cs = getComputedStyle(safeEl), px = v => (parseFloat(v) || 0) / scale;
+    inset = { t: px(cs.paddingTop), r: px(cs.paddingRight), b: px(cs.paddingBottom), l: px(cs.paddingLeft) };
+    player.x = Math.max(70, Math.min(140, W * 0.13));
+    if (onGround) player.y = GROUND;
+    speed = state === 'running' ? Math.min(speed, MAXV * K) : START * K;
+    sky = ctx.createLinearGradient(0, 0, 0, GROUND);
+    sky.addColorStop(0, '#6fa8bd'); sky.addColorStop(1, '#f3d68e');
+  }
+
+  fit(); window.addEventListener('resize', fit);
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -285,7 +302,7 @@ button:focus-visible{outline:2px solid #f2b73c;outline-offset:2px}
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
-    navigator.serviceWorker.ready.then(() => { document.getElementById('offline').hidden = false; });
+    navigator.serviceWorker.ready.then(() => { const t = document.getElementById('offline'); t.hidden = false; setTimeout(() => { t.hidden = true; }, 3500); });
   });
 }
 </script>
